@@ -70,7 +70,8 @@ class MovieSerializer(serializers.ModelSerializer):
 
 class MovieSessionListSerializer(serializers.ModelSerializer):
     movie_title = serializers.CharField(source="movie.title", read_only=True)
-    cinema_hall_name = serializers.CharField(source="cinema_hall.name", read_only=True)
+    cinema_hall_name = serializers.CharField(source="cinema_hall.name",
+                                             read_only=True)
     cinema_hall_capacity = serializers.SerializerMethodField()
     tickets_available = serializers.IntegerField(read_only=True)
 
@@ -87,7 +88,6 @@ class MovieSessionListSerializer(serializers.ModelSerializer):
 
     def get_cinema_hall_capacity(self, obj):
         return obj.cinema_hall.rows * obj.cinema_hall.seats_in_row
-
 
 
 class TicketSeatsSerializer(serializers.ModelSerializer):

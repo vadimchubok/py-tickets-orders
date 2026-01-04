@@ -46,7 +46,8 @@ class CinemaHallViewSet(viewsets.ModelViewSet):
 
 
 class MovieViewSet(viewsets.ModelViewSet):
-    queryset = Movie.objects.all().prefetch_related("genres", "actors").order_by("id")
+    queryset = Movie.objects.all().prefetch_related("genres",
+                                                    "actors").order_by("id")
     pagination_class = None
 
     def get_queryset(self):
@@ -59,14 +60,16 @@ class MovieViewSet(viewsets.ModelViewSet):
             try:
                 actors_ids = [int(i) for i in actors.split(",")]
             except ValueError:
-                raise ValidationError({"actors": "Actor IDs must be integers."})
+                raise ValidationError(
+                    {"actors": "Actor IDs must be integers."})
             queryset = queryset.filter(actors__id__in=actors_ids)
 
         if genres:
             try:
                 genres_ids = [int(i) for i in genres.split(",")]
             except ValueError:
-                raise ValidationError({"genres": "Genre IDs must be integers."})
+                raise ValidationError(
+                    {"genres": "Genre IDs must be integers."})
             queryset = queryset.filter(genres__id__in=genres_ids)
 
         if title:
@@ -110,7 +113,8 @@ class MovieSessionViewSet(viewsets.ModelViewSet):
             try:
                 movie_id = int(movie_id)
             except ValueError:
-                raise ValidationError({"movie": "Movie ID must be an integer."})
+                raise ValidationError(
+                    {"movie": "Movie ID must be an integer."})
             queryset = queryset.filter(movie_id=movie_id)
 
         return queryset
