@@ -1,6 +1,7 @@
 from django.db.models import F, Count
 from rest_framework import viewsets, mixins
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
 
 from cinema.models import (
     Genre,
@@ -16,11 +17,11 @@ from cinema.serializers import (
     ActorSerializer,
     CinemaHallSerializer,
     MovieSerializer,
+    MovieListSerializer,
+    MovieDetailSerializer,
     MovieSessionSerializer,
     MovieSessionListSerializer,
-    MovieDetailSerializer,
     MovieSessionDetailSerializer,
-    MovieListSerializer,
     OrderSerializer,
     OrderListSerializer,
 )
@@ -45,8 +46,7 @@ class CinemaHallViewSet(viewsets.ModelViewSet):
 
 
 class MovieViewSet(viewsets.ModelViewSet):
-    queryset = Movie.objects.all().order_by("id")
-    serializer_class = MovieSerializer
+    queryset = Movie.objects.all().prefetch_related("genres", "actors").order_by("id")
     pagination_class = None
 
     def get_queryset(self):
@@ -56,11 +56,17 @@ class MovieViewSet(viewsets.ModelViewSet):
         title = self.request.query_params.get("title")
 
         if actors:
-            actors_ids = [int(str_id) for str_id in actors.split(",")]
+            try:
+                actors_ids = [int(i) for i in actors.split(",")]
+            except ValueError:
+                raise ValidationError({"actors": "Actor IDs must be integers."})
             queryset = queryset.filter(actors__id__in=actors_ids)
 
         if genres:
-            genres_ids = [int(str_id) for str_id in genres.split(",")]
+            try:
+                genres_ids = [int(i) for i in genres.split(",")]
+            except ValueError:
+                raise ValidationError({"genres": "Genre IDs must be integers."})
             queryset = queryset.filter(genres__id__in=genres_ids)
 
         if title:
@@ -71,30 +77,29 @@ class MovieViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == "list":
             return MovieListSerializer
-
         if self.action == "retrieve":
             return MovieDetailSerializer
-
         return MovieSerializer
 
 
 class MovieSessionViewSet(viewsets.ModelViewSet):
-    queryset = (
-        MovieSession.objects.all()
-        .select_related("movie", "cinema_hall")
-        .annotate(
-            tickets_available=(
-                F("cinema_hall__rows") * F("cinema_hall__seats_in_row")
-                - Count("tickets")
-            )
-        )
-        .order_by("id")
-    )
-    serializer_class = MovieSessionSerializer
+    queryset = MovieSession.objects.all()
     pagination_class = None
 
     def get_queryset(self):
-        queryset = self.queryset
+        queryset = (
+            super().get_queryset()
+            .select_related("movie", "cinema_hall")
+            .annotate(
+                tickets_available=(
+                    F("cinema_hall__rows")
+                    * F("cinema_hall__seats_in_row")
+                    - Count("tickets")
+                )
+            )
+            .order_by("id")
+        )
+
         date = self.request.query_params.get("date")
         movie_id = self.request.query_params.get("movie")
 
@@ -102,17 +107,19 @@ class MovieSessionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(show_time__date=date)
 
         if movie_id:
-            queryset = queryset.filter(movie_id=int(movie_id))
+            try:
+                movie_id = int(movie_id)
+            except ValueError:
+                raise ValidationError({"movie": "Movie ID must be an integer."})
+            queryset = queryset.filter(movie_id=movie_id)
 
-        return queryset.distinct()
+        return queryset
 
     def get_serializer_class(self):
         if self.action == "list":
             return MovieSessionListSerializer
-
         if self.action == "retrieve":
             return MovieSessionDetailSerializer
-
         return MovieSessionSerializer
 
 
@@ -123,9 +130,8 @@ class OrderViewSet(
 ):
     queryset = Order.objects.prefetch_related(
         "tickets__movie_session__movie",
-        "tickets__movie_session__cinema_hall"
+        "tickets__movie_session__cinema_hall",
     ).order_by("-created_at")
-    serializer_class = OrderSerializer
     permission_classes = (IsAuthenticated,)
 
     def get_queryset(self):
@@ -134,7 +140,6 @@ class OrderViewSet(
     def get_serializer_class(self):
         if self.action == "list":
             return OrderListSerializer
-
         return OrderSerializer
 
     def perform_create(self, serializer):
